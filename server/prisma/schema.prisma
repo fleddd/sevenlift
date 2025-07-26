@@ -14,11 +14,84 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id       String   @id @default(cuid())
+  email    String   @unique
+  password String
+  name     String?
+  provider Provider @default(LOCAL)
+
+  currentPlanId String?  @map("current_plan_id")
+  folders       Folder[]
+
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  ProgramPlan ProgramPlan[]
+
+  @@map("users")
+}
+
+model ProgramPlan {
+  id String @id @default(cuid())
+
+  name String // Name of the program plan "PPL", "Arnold Split"
+
+  userId   String  @map("user_id")
+  user     User    @relation(fields: [userId], references: [id])
+  folderId String? @map("folder_id")
+  folder   Folder? @relation(fields: [folderId], references: [id])
+
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  TrainingDay TrainingDay[]
+
+  @@index([userId])
+  @@map("program_plans")
+}
+
+model Folder {
+  id           String        @id @default(cuid())
+  userId       String        @map("user_id")
+  user         User          @relation(fields: [userId], references: [id])
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  programPlans ProgramPlan[]
+
+  @@index([userId])
+  @@map("folders")
+}
+
+model TrainingDay {
+  id            String      @id @default(cuid())
+  dayIndex      Int         @map("day_index") // 0 = Monday, 1 = Tuesday, etc.
+  title         String
+  programPlanId String      @map("program_plan_id")
+  programPlan   ProgramPlan @relation(fields: [programPlanId], references: [id])
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  exercises Exercise[] @relation("TrainingDayExercises")
+
+  @@index([programPlanId])
+  @@map("training_days")
+}
+
+model Exercise {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  sets        Int
+  reps        Int
+  order       Int
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  trainingDays TrainingDay[] @relation("TrainingDayExercises")
+
+  @@map("exercises")
+}
+
+enum Provider {
+  GOOGLE
+  LOCAL
 }
