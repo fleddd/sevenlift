@@ -7,13 +7,14 @@ export class UsersService {
     constructor(private readonly prisma: PrismaService) { }
 
 
-    async createUser(email: string, password: string, provider: Provider, name: string) {
+    async createUser(email: string, password: string, provider: Provider, name: string, refreshToken: string | null = null) {
         const newUser = await this.prisma.user.create({
             data: {
                 email,
                 password,
                 provider,
                 name,
+                refreshToken
             },
         });
         const { password: newUserPassword, ...newUserWithoutPassword } = newUser;

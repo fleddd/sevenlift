@@ -5,6 +5,8 @@ import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hash, verifyHash } from './utils';
+import { Profile } from 'passport-google-oauth20';
+import { ref } from 'process';
 
 @Injectable()
 export class AuthService {
@@ -131,11 +133,28 @@ export class AuthService {
             expires: expiresAccessToken,
         })
 
+
+
         return userWithPassword;
     }
 
+    async getUserWithUser(userProfile: Profile, refreshToken: string | null = null) {
+        const { email, name } = userProfile._json;
+        if (!email) {
+            throw new BadRequestException('Google account does not have an email associated with it.');
+        }
+        if (!refreshToken) {
+            throw new BadRequestException('Google account does not have a refresh token associated with it.');
+        }
+        const hashedRefreshToken = await hash(refreshToken);
 
+        const existingUser = await this.usersService.findUserByEmail(email);
+        if (!existingUser) {
+            return await this.usersService.createUser(email, '', Provider.GOOGLE, name || email, hashedRefreshToken);
+        }
+        return existingUser;
 
+    }
     private generateJwtToken(payload: object, secret: string, expiresInMs: number): string {
         return this.jwtService.sign(payload, {
             secret,
