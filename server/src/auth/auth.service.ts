@@ -4,7 +4,7 @@ import { UsersService } from 'src/users/users.service';
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { hash, verifyHash, generateJwtToken } from './utils';
+import { hash, verifyHash } from './utils';
 
 @Injectable()
 export class AuthService {
@@ -26,15 +26,13 @@ export class AuthService {
             userId: user.id
         }
 
-        const accessToken = generateJwtToken(
-            this.jwtService,
+        const accessToken = this.generateJwtToken(
             tokenPayload,
             this.configService.getOrThrow("JWT_ACCESS_SECRET"),
             accessTokenExpiresInMs
         )
 
-        const refreshToken = generateJwtToken(
-            this.jwtService,
+        const refreshToken = this.generateJwtToken(
             tokenPayload,
             this.configService.getOrThrow("JWT_REFRESH_SECRET"),
             refreshTokenExpiresInMs,
@@ -121,8 +119,7 @@ export class AuthService {
             userId: user.id
         }
 
-        const accessToken = generateJwtToken(
-            this.jwtService,
+        const accessToken = this.generateJwtToken(
             tokenPayload,
             this.configService.getOrThrow("JWT_ACCESS_SECRET"),
             accessTokenExpiresInMs
@@ -139,7 +136,12 @@ export class AuthService {
 
 
 
-
+    private generateJwtToken(payload: object, secret: string, expiresInMs: number): string {
+        return this.jwtService.sign(payload, {
+            secret,
+            expiresIn: `${expiresInMs}ms`,
+        });
+    }
 
 
 
