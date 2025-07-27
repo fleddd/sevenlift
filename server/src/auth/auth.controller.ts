@@ -1,7 +1,7 @@
 import { Body, Controller, Get, HttpCode, Post, Req, Res, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterUserDto } from './dto/user.dto';
-import { LocalAuthGuard, JwtRefreshAuthGuard, GoogleOAuthGuard } from './guards';
+import { LocalAuthGuard, JwtRefreshAuthGuard, GoogleOAuthGuard, GithubOAuthGuard } from './guards';
 import { CurrentUser } from './decorators/currentUser.decorator';
 import { User } from 'generated/prisma';
 import { Request, Response } from 'express';
@@ -36,9 +36,28 @@ export class AuthController {
 
   @UseGuards(GoogleOAuthGuard)
   @Get('google/callback')
-  async googleCallback(@CurrentUser() user: User, @Res({ passthrough: true }) res: Response, @Req() req: Request) {
+  async googleCallback(@CurrentUser() user: User, @Res({ passthrough: true }) res: Response) {
     await this.authService.login(user, res); // generate own JWT tokens
-    res.clearCookie('jwt') // clear the cookie set by Google OAuth
+    res.redirect(`${this.configService.getOrThrow("CLIENT_URL")}`);
+  }
+
+  @UseGuards(GithubOAuthGuard)
+  @Get('github')
+  loginWithGithub() { }
+
+  @UseGuards(GithubOAuthGuard)
+  @Get('github/callback')
+  async githubCallback(@CurrentUser() user: User, @Res({ passthrough: true }) res: Response) {
+    await this.authService.login(user, res); // generate own JWT tokens
+    res.redirect(`${this.configService.getOrThrow("CLIENT_URL")}`);
+  }
+
+  @Get("failure")
+
+  @Get('logout')
+  @HttpCode(200)
+  async logout(@CurrentUser() user: User, @Res({ passthrough: true }) res: Response) {
+    await this.authService.logout(user, res);
     res.redirect(`${this.configService.getOrThrow("CLIENT_URL")}`);
   }
 }

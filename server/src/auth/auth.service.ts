@@ -5,8 +5,6 @@ import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hash, verifyHash } from './utils';
-import { Profile } from 'passport-google-oauth20';
-import { ref } from 'process';
 
 @Injectable()
 export class AuthService {
@@ -133,27 +131,26 @@ export class AuthService {
             expires: expiresAccessToken,
         })
 
-
-
         return userWithPassword;
     }
 
-    async getUserWithUser(userProfile: Profile, refreshToken: string | null = null) {
-        const { email, name } = userProfile._json;
-        if (!email) {
-            throw new BadRequestException('Google account does not have an email associated with it.');
+    async getUserWithOAuth(email: string | undefined, name: string | undefined) {
+        if (!email || !name) {
+            throw new BadRequestException('This account provider does not have an email or name associated with it.');
         }
-        if (!refreshToken) {
-            throw new BadRequestException('Google account does not have a refresh token associated with it.');
-        }
-        const hashedRefreshToken = await hash(refreshToken);
 
         const existingUser = await this.usersService.findUserByEmail(email);
         if (!existingUser) {
-            return await this.usersService.createUser(email, '', Provider.GOOGLE, name || email, hashedRefreshToken);
+            return await this.usersService.createUser(email, '', Provider.GOOGLE, name || email);
         }
         return existingUser;
+    }
 
+    async logout(user: User, res: Response) {
+        res.clearCookie('Authentication');
+        res.clearCookie('Refresh');
+
+        await this.usersService.updateUserById(user.id, { refreshToken: null });
     }
     private generateJwtToken(payload: object, secret: string, expiresInMs: number): string {
         return this.jwtService.sign(payload, {
@@ -161,6 +158,8 @@ export class AuthService {
             expiresIn: `${expiresInMs}ms`,
         });
     }
+
+
 
 
 

@@ -2,8 +2,9 @@ import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AuthGuard } from "@nestjs/passport";
 import { Response } from "express";
+
 @Injectable()
-export class GoogleOAuthGuard extends AuthGuard('google') {
+export class GithubOAuthGuard extends AuthGuard('github') {
     constructor(private readonly configService: ConfigService) {
         super();
     }

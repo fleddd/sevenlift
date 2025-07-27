@@ -1,10 +1,8 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { PassportStrategy } from "@nestjs/passport";
 import { Profile, Strategy, VerifyCallback } from "passport-google-oauth20";
 import { ConfigService } from "@nestjs/config";
-import { Request } from "express";
 import { AuthService } from "../auth.service";
-import { User } from "generated/prisma";
 
 @Injectable()
 export class GoogleOAuthStrategy extends PassportStrategy(Strategy, "google") {
@@ -17,19 +15,12 @@ export class GoogleOAuthStrategy extends PassportStrategy(Strategy, "google") {
 
         })
     }
-    authorizationParams(): { [key: string]: string; } {
-        return ({
-            access_type: 'offline',
-            prompt: 'consent',
-
-        });
-    };
 
     async validate(accessToken: string,
         refreshToken: string,
         profile: Profile,
         done: VerifyCallback) {
-        const user = await this.authService.getUserWithUser(profile, refreshToken);
+        const user = await this.authService.getUserWithOAuth(profile._json.email, profile._json.name);
         done(null, user);
     }
 
