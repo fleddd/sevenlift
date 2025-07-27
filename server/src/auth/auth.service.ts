@@ -1,16 +1,17 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { Provider, User } from 'generated/prisma';
 import { UsersService } from 'src/users/users.service';
-import * as argon2 from 'argon2';
-import e, { Response } from 'express';
+import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { hash, verifyHash, generateJwtToken } from './utils';
 
 @Injectable()
 export class AuthService {
     constructor(private readonly usersService: UsersService, private readonly configService: ConfigService, private readonly jwtService: JwtService) { }
 
     async login(user: User, response: Response) {
+        const { password, ...userWithPassword } = user;
         const now = Date.now();
 
         const accessTokenExpiresInMs = parseInt(this.configService.getOrThrow("JWT_ACCESS_EXPIRATION_TIME_MS"));
@@ -24,19 +25,16 @@ export class AuthService {
             userId: user.id
         }
 
-        const accessToken = this.jwtService.sign(
+        const accessToken = generateJwtToken(
             tokenPayload,
-            {
-                secret: this.configService.getOrThrow("JWT_ACCESS_SECRET"),
-                expiresIn: `${accessTokenExpiresInMs}ms`,
-            }
+            this.configService.getOrThrow("JWT_ACCESS_SECRET"),
+            accessTokenExpiresInMs
         )
-        const refreshToken = this.jwtService.sign(
+
+        const refreshToken = generateJwtToken(
             tokenPayload,
-            {
-                secret: this.configService.getOrThrow("JWT_REFRESH_SECRET"),
-                expiresIn: `${refreshTokenExpiresInMs}ms`,
-            }
+            this.configService.getOrThrow("JWT_REFRESH_SECRET"),
+            refreshTokenExpiresInMs,
         )
 
         response.cookie('Authentication', accessToken, {
@@ -52,9 +50,13 @@ export class AuthService {
             expires: expiresRefreshToken,
         })
 
+
         await this.usersService.updateUserById(user.id, {
-            refreshToken: await argon2.hash(refreshToken),
+            refreshToken: await hash(refreshToken),
         })
+
+
+        return userWithPassword;
     }
 
     async verifyUser(email: string, password: string) {
@@ -63,7 +65,7 @@ export class AuthService {
             throw new BadRequestException('User not found. This email is not registered.');
         }
 
-        const isPasswordValid = await argon2.verify(user.password, password);
+        const isPasswordValid = await verifyHash(user.password, password);
 
         if (!isPasswordValid) {
             throw new BadRequestException('Invalid email or password. Please try again.');
@@ -78,7 +80,7 @@ export class AuthService {
             throw new BadRequestException('Email already registered. Please use a different email.');
         }
 
-        const hashedPassword = await this.hashPassword(password);
+        const hashedPassword = await hash(password);
 
         return this.usersService.createUser(email, hashedPassword, Provider.LOCAL, name);
     }
@@ -89,7 +91,7 @@ export class AuthService {
             throw new BadRequestException('Invalid refresh token.');
         }
 
-        const isRefreshTokenValid = await argon2.verify(user.refreshToken, refreshToken);
+        const isRefreshTokenValid = await verifyHash(user.refreshToken, refreshToken);
         if (!isRefreshTokenValid) {
             throw new UnauthorizedException('Invalid refresh token. You need to log in again.');
         }
@@ -98,9 +100,8 @@ export class AuthService {
     }
 
 
-    private async hashPassword(password: string): Promise<string> {
-        return await argon2.hash(password)
-    }
+
+
 
 
 

@@ -1,11 +1,10 @@
 import { Body, Controller, HttpCode, Post, Res, UseGuards, UsePipes, ValidationPipe } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterUserDto } from './dto/user.dto';
-import { LocalAuthGuard } from './guards/local-auth.guard';
+import { LocalAuthGuard, JwtRefreshAuthGuard } from './guards';
 import { CurrentUser } from './decorators/currentUser.decorator';
 import { User } from 'generated/prisma';
 import { Response } from 'express';
-import { JwtRefreshAuthGuard } from './guards/jwt-refresh-auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -20,13 +19,13 @@ export class AuthController {
   @UseGuards(LocalAuthGuard)
   @Post('login')
   loginUser(@CurrentUser() user: User, @Res({ passthrough: true }) res: Response) {
-    this.authService.login(user, res);
+    return this.authService.login(user, res);
   }
 
   @HttpCode(200)
   @Post('refresh')
   @UseGuards(JwtRefreshAuthGuard)
   refreshToken(@CurrentUser() user: User, @Res({ passthrough: true }) res: Response) {
-    this.authService.login(user, res);
+    return this.authService.login(user, res);
   }
 }

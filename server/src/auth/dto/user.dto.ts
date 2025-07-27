@@ -1,9 +1,4 @@
-import { Optional } from "@nestjs/common";
-import { IsEmail, IsNotEmpty, isString, IsString, IsStrongPassword } from "class-validator";
-import { Provider } from "generated/prisma";
-
-
-
+import { IsEmail, IsNotEmpty, IsString, IsStrongPassword } from "class-validator";
 
 export class RegisterUserDto {
     @IsEmail()
