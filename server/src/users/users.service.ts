@@ -23,12 +23,22 @@ export class UsersService {
     findUserByEmail(email: string) {
         return this.prisma.user.findUnique({
             where: { email },
+
         });
     }
     findUserById(id: string) {
         return this.prisma.user.findUnique({
-            where: { id },
-        });
+            where: {
+                id
+            },
+            include: {
+                folders: true
+            },
+            omit: {
+                password: true
+            }
+
+        })
     }
 
     getAllUsers() {
@@ -41,4 +51,5 @@ export class UsersService {
             data,
         });
     }
+
 }

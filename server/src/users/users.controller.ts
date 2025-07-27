@@ -11,7 +11,6 @@ export class UsersController {
   @Get("me")
   @UseGuards(JwtAuthGuard)
   getMe(@CurrentUser() user: User) {
-    const { password, ...userWithoutPassword } = user;
-    return userWithoutPassword;
+    return this.usersService.findUserById(user.id)
   }
 }
