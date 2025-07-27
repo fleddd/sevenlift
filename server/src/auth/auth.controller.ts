@@ -20,7 +20,7 @@ export class AuthController {
   @UseGuards(LocalAuthGuard)
   @Post('login')
   loginUser(@CurrentUser() user: User, @Res({ passthrough: true }) res: Response) {
-    console.log('User logged in:', user);
+    return this.authService.login(user, res);
   }
 
   @HttpCode(200)
@@ -52,7 +52,6 @@ export class AuthController {
     res.redirect(`${this.configService.getOrThrow("CLIENT_URL")}`);
   }
 
-  @Get("failure")
 
   @Get('logout')
   @HttpCode(200)

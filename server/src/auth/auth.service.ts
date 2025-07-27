@@ -71,8 +71,8 @@ export class AuthService {
             throw new BadRequestException('User not found. This email is not registered.');
         }
 
-        if (!user.password || !user.password.startsWith('$')) {
-            throw new BadRequestException('User password is not set or is in an invalid format.');
+        if (!user.password) {
+            throw new BadRequestException('This account does not have a passoword associated with it. Try to log in with a different method.');
         }
 
         const isPasswordValid = await verifyHash(user.password, password);
