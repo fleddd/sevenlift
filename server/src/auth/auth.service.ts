@@ -12,6 +12,7 @@ export class AuthService {
 
     async login(user: User, response: Response) {
         const { password, ...userWithPassword } = user;
+
         const now = Date.now();
 
         const accessTokenExpiresInMs = parseInt(this.configService.getOrThrow("JWT_ACCESS_EXPIRATION_TIME_MS"));
@@ -26,12 +27,14 @@ export class AuthService {
         }
 
         const accessToken = generateJwtToken(
+            this.jwtService,
             tokenPayload,
             this.configService.getOrThrow("JWT_ACCESS_SECRET"),
             accessTokenExpiresInMs
         )
 
         const refreshToken = generateJwtToken(
+            this.jwtService,
             tokenPayload,
             this.configService.getOrThrow("JWT_REFRESH_SECRET"),
             refreshTokenExpiresInMs,
@@ -50,19 +53,28 @@ export class AuthService {
             expires: expiresRefreshToken,
         })
 
+        const hashedRefreshToken = await hash(refreshToken);
+
 
         await this.usersService.updateUserById(user.id, {
-            refreshToken: await hash(refreshToken),
+            refreshToken: hashedRefreshToken,
         })
 
 
-        return userWithPassword;
+        return {
+            ...userWithPassword,
+            refreshToken: hashedRefreshToken
+        };
     }
 
     async verifyUser(email: string, password: string) {
         const user = await this.usersService.findUserByEmail(email);
         if (!user) {
             throw new BadRequestException('User not found. This email is not registered.');
+        }
+
+        if (!user.password || !user.password.startsWith('$')) {
+            throw new BadRequestException('User password is not set or is in an invalid format.');
         }
 
         const isPasswordValid = await verifyHash(user.password, password);
@@ -97,6 +109,32 @@ export class AuthService {
         }
 
         return user;
+    }
+    async refreshAccessToken(user: User, response: Response) {
+        const { password, ...userWithPassword } = user;
+        const now = Date.now();
+        const accessTokenExpiresInMs = parseInt(this.configService.getOrThrow("JWT_ACCESS_EXPIRATION_TIME_MS"));
+
+        const expiresAccessToken = new Date(now + accessTokenExpiresInMs);
+
+        const tokenPayload = {
+            userId: user.id
+        }
+
+        const accessToken = generateJwtToken(
+            this.jwtService,
+            tokenPayload,
+            this.configService.getOrThrow("JWT_ACCESS_SECRET"),
+            accessTokenExpiresInMs
+        )
+
+        response.cookie('Authentication', accessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            expires: expiresAccessToken,
+        })
+
+        return userWithPassword;
     }
 
 

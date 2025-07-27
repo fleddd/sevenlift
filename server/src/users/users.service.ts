@@ -7,8 +7,8 @@ export class UsersService {
     constructor(private readonly prisma: PrismaService) { }
 
 
-    createUser(email: string, password: string, provider: Provider, name: string) {
-        return this.prisma.user.create({
+    async createUser(email: string, password: string, provider: Provider, name: string) {
+        const newUser = await this.prisma.user.create({
             data: {
                 email,
                 password,
@@ -16,6 +16,8 @@ export class UsersService {
                 name,
             },
         });
+        const { password: newUserPassword, ...newUserWithoutPassword } = newUser;
+        return newUserWithoutPassword;
     }
     findUserByEmail(email: string) {
         return this.prisma.user.findUnique({
