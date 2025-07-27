@@ -26,14 +26,15 @@ model User {
 
   refreshToken String? @map("refresh_token")
 
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-  ProgramPlan ProgramPlan[]
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  trainingProgram TrainingProgram[]
+  Exercise        Exercise[]
 
   @@map("users")
 }
 
-model ProgramPlan {
+model TrainingProgram {
   id String @id @default(cuid())
 
   name String // Name of the program plan "PPL", "Arnold Split"
@@ -48,49 +49,67 @@ model ProgramPlan {
   TrainingDay TrainingDay[]
 
   @@index([userId])
-  @@map("program_plans")
+  @@map("training_programs")
 }
 
 model Folder {
-  id           String        @id @default(cuid())
-  userId       String        @map("user_id")
-  user         User          @relation(fields: [userId], references: [id])
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
-  programPlans ProgramPlan[]
+  id               String            @id @default(cuid())
+  userId           String            @map("user_id")
+  user             User              @relation(fields: [userId], references: [id])
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  trainingPrograms TrainingProgram[]
 
   @@index([userId])
   @@map("folders")
 }
 
 model TrainingDay {
-  id            String      @id @default(cuid())
-  dayIndex      Int         @map("day_index") // 0 = Monday, 1 = Tuesday, etc.
-  title         String
-  programPlanId String      @map("program_plan_id")
-  programPlan   ProgramPlan @relation(fields: [programPlanId], references: [id])
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  id                String          @id @default(cuid())
+  dayIndex          Int             @map("day_index") // 0 = Monday, 1 = Tuesday, etc.
+  title             String
+  trainingProgramId String          @map("program_plan_id")
+  trainingProgram   TrainingProgram @relation(fields: [trainingProgramId], references: [id])
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
 
-  exercises Exercise[] @relation("TrainingDayExercises")
+  exercises TrainingDayExercise[]
 
-  @@index([programPlanId])
+  @@index([trainingProgramId])
   @@map("training_days")
 }
 
 model Exercise {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  sets        Int
-  reps        Int
-  order       Int
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-
-  trainingDays TrainingDay[] @relation("TrainingDayExercises")
+  id                  String                @id @default(cuid())
+  name                String                @unique
+  description         String?
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+  userId              String?               @map("user_id") // If null, it's global else - custom exercise
+  user                User?                 @relation(fields: [userId], references: [id])
+  TrainingDayExercise TrainingDayExercise[]
 
   @@map("exercises")
+}
+
+model TrainingDayExercise {
+  id            String      @id @default(cuid())
+  trainingDayId String      @map("training_day_id")
+  trainingDay   TrainingDay @relation(fields: [trainingDayId], references: [id])
+
+  exerciseId String   @map("exercise_id")
+  exercise   Exercise @relation(fields: [exerciseId], references: [id])
+
+  sets  Int
+  reps  Int
+  order Int @default(0)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([trainingDayId])
+  @@index([exerciseId])
+  @@map("training_day_exercises")
 }
 
 enum Provider {
