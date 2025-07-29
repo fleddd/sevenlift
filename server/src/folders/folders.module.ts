@@ -3,7 +3,7 @@ import { FoldersService } from './folders.service';
 import { FoldersController } from './folders.controller';
 
 @Module({
-  controllers: [FoldersController],
-  providers: [FoldersService],
+	controllers: [FoldersController],
+	providers: [FoldersService]
 })
 export class FoldersModule {}
