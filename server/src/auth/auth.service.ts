@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+	BadRequestException,
+	Injectable,
+	UnauthorizedException
+} from '@nestjs/common';
 import { Provider, User } from 'generated/prisma';
 import { UsersService } from 'src/users/users.service';
 import { Response } from 'express';
@@ -8,159 +12,186 @@ import { hash, verifyHash } from './utils';
 
 @Injectable()
 export class AuthService {
-    constructor(private readonly usersService: UsersService, private readonly configService: ConfigService, private readonly jwtService: JwtService) { }
+	constructor(
+		private readonly usersService: UsersService,
+		private readonly configService: ConfigService,
+		private readonly jwtService: JwtService
+	) {}
 
-    async login(user: User, response: Response) {
-        const { password, ...userWithPassword } = user;
+	async login(user: User, response: Response) {
+		const now = Date.now();
 
-        const now = Date.now();
+		const accessTokenExpiresInMs = parseInt(
+			this.configService.getOrThrow('JWT_ACCESS_EXPIRATION_TIME_MS')
+		);
+		const refreshTokenExpiresInMs = parseInt(
+			this.configService.getOrThrow('JWT_REFRESH_EXPIRATION_TIME_MS')
+		);
 
-        const accessTokenExpiresInMs = parseInt(this.configService.getOrThrow("JWT_ACCESS_EXPIRATION_TIME_MS"));
-        const refreshTokenExpiresInMs = parseInt(this.configService.getOrThrow("JWT_REFRESH_EXPIRATION_TIME_MS"));
+		const expiresAccessToken = new Date(now + accessTokenExpiresInMs);
+		const expiresRefreshToken = new Date(now + refreshTokenExpiresInMs);
 
-        const expiresAccessToken = new Date(now + accessTokenExpiresInMs);
-        const expiresRefreshToken = new Date(now + refreshTokenExpiresInMs);
+		const tokenPayload = {
+			userId: user.id
+		};
 
+		const accessToken = this.generateJwtToken(
+			tokenPayload,
+			this.configService.getOrThrow('JWT_ACCESS_SECRET'),
+			accessTokenExpiresInMs
+		);
 
-        const tokenPayload = {
-            userId: user.id
-        }
+		const refreshToken = this.generateJwtToken(
+			tokenPayload,
+			this.configService.getOrThrow('JWT_REFRESH_SECRET'),
+			refreshTokenExpiresInMs
+		);
 
-        const accessToken = this.generateJwtToken(
-            tokenPayload,
-            this.configService.getOrThrow("JWT_ACCESS_SECRET"),
-            accessTokenExpiresInMs
-        )
+		response.cookie('Authentication', accessToken, {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === 'production',
+			expires: expiresAccessToken
+		});
 
-        const refreshToken = this.generateJwtToken(
-            tokenPayload,
-            this.configService.getOrThrow("JWT_REFRESH_SECRET"),
-            refreshTokenExpiresInMs,
-        )
+		response.cookie('Refresh', refreshToken, {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === 'production',
+			expires: expiresRefreshToken
+		});
 
-        response.cookie('Authentication', accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            expires: expiresAccessToken,
-        })
+		const hashedRefreshToken = await hash(refreshToken);
 
+		await this.usersService.updateUserById(user.id, {
+			refreshToken: hashedRefreshToken
+		});
 
-        response.cookie('Refresh', refreshToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            expires: expiresRefreshToken,
-        })
+		return {
+			...user,
+			refreshToken: hashedRefreshToken
+		};
+	}
 
-        const hashedRefreshToken = await hash(refreshToken);
+	async verifyUser(email: string, password: string) {
+		const user = await this.usersService.findUserByEmail(email);
+		if (!user) {
+			throw new BadRequestException(
+				'User not found. This email is not registered.'
+			);
+		}
 
+		if (!user.password) {
+			throw new BadRequestException(
+				'This account does not have a passoword associated with it. Try to log in with a different method.'
+			);
+		}
 
-        await this.usersService.updateUserById(user.id, {
-            refreshToken: hashedRefreshToken,
-        })
+		const isPasswordValid = await verifyHash(user.password, password);
 
+		if (!isPasswordValid) {
+			throw new BadRequestException(
+				'Invalid email or password. Please try again.'
+			);
+		}
 
-        return {
-            ...userWithPassword,
-            refreshToken: hashedRefreshToken
-        };
-    }
+		return user;
+	}
 
-    async verifyUser(email: string, password: string) {
-        const user = await this.usersService.findUserByEmail(email);
-        if (!user) {
-            throw new BadRequestException('User not found. This email is not registered.');
-        }
+	async registerUser(email: string, password: string, name: string) {
+		const existingUser = await this.usersService.findUserByEmail(email);
+		if (existingUser) {
+			throw new BadRequestException(
+				'Email already registered. Please use a different email.'
+			);
+		}
 
-        if (!user.password) {
-            throw new BadRequestException('This account does not have a passoword associated with it. Try to log in with a different method.');
-        }
+		const hashedPassword = await hash(password);
 
-        const isPasswordValid = await verifyHash(user.password, password);
+		return this.usersService.createUser(
+			email,
+			hashedPassword,
+			Provider.LOCAL,
+			name
+		);
+	}
+	async verifyRefreshToken(refreshToken: string, userId: string) {
+		const user = await this.usersService.findUserById(userId);
 
-        if (!isPasswordValid) {
-            throw new BadRequestException('Invalid email or password. Please try again.');
-        }
+		if (!user || !user.refreshToken) {
+			throw new BadRequestException('Invalid refresh token.');
+		}
 
-        return user;
-    }
+		const isRefreshTokenValid = await verifyHash(
+			user.refreshToken,
+			refreshToken
+		);
+		if (!isRefreshTokenValid) {
+			throw new UnauthorizedException(
+				'Invalid refresh token. You need to log in again.'
+			);
+		}
 
-    async registerUser(email: string, password: string, name: string) {
-        const existingUser = await this.usersService.findUserByEmail(email);
-        if (existingUser) {
-            throw new BadRequestException('Email already registered. Please use a different email.');
-        }
+		return user;
+	}
+	async refreshAccessToken(user: User, response: Response) {
+		const now = Date.now();
+		const accessTokenExpiresInMs = parseInt(
+			this.configService.getOrThrow('JWT_ACCESS_EXPIRATION_TIME_MS')
+		);
 
-        const hashedPassword = await hash(password);
+		const expiresAccessToken = new Date(now + accessTokenExpiresInMs);
 
-        return this.usersService.createUser(email, hashedPassword, Provider.LOCAL, name);
-    }
-    async verifyRefreshToken(refreshToken: string, userId: string) {
-        const user = await this.usersService.findUserById(userId);
+		const tokenPayload = {
+			userId: user.id
+		};
 
-        if (!user || !user.refreshToken) {
-            throw new BadRequestException('Invalid refresh token.');
-        }
+		const accessToken = this.generateJwtToken(
+			tokenPayload,
+			this.configService.getOrThrow('JWT_ACCESS_SECRET'),
+			accessTokenExpiresInMs
+		);
 
-        const isRefreshTokenValid = await verifyHash(user.refreshToken, refreshToken);
-        if (!isRefreshTokenValid) {
-            throw new UnauthorizedException('Invalid refresh token. You need to log in again.');
-        }
+		response.cookie('Authentication', accessToken, {
+			httpOnly: true,
+			secure: process.env.NODE_ENV === 'production',
+			expires: expiresAccessToken
+		});
 
-        return user;
-    }
-    async refreshAccessToken(user: User, response: Response) {
-        const { password, ...userWithPassword } = user;
-        const now = Date.now();
-        const accessTokenExpiresInMs = parseInt(this.configService.getOrThrow("JWT_ACCESS_EXPIRATION_TIME_MS"));
+		return user;
+	}
 
-        const expiresAccessToken = new Date(now + accessTokenExpiresInMs);
+	async getUserWithOAuth(email: string | undefined, name: string | undefined) {
+		if (!email || !name) {
+			throw new BadRequestException(
+				'This account provider does not have an email or name associated with it.'
+			);
+		}
 
-        const tokenPayload = {
-            userId: user.id
-        }
+		const existingUser = await this.usersService.findUserByEmail(email);
+		if (!existingUser) {
+			return await this.usersService.createUser(
+				email,
+				'',
+				Provider.GOOGLE,
+				name || email
+			);
+		}
+		return existingUser;
+	}
 
-        const accessToken = this.generateJwtToken(
-            tokenPayload,
-            this.configService.getOrThrow("JWT_ACCESS_SECRET"),
-            accessTokenExpiresInMs
-        )
+	async logout(user: User, res: Response) {
+		res.clearCookie('Authentication');
+		res.clearCookie('Refresh');
 
-        response.cookie('Authentication', accessToken, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            expires: expiresAccessToken,
-        })
-
-        return userWithPassword;
-    }
-
-    async getUserWithOAuth(email: string | undefined, name: string | undefined) {
-        if (!email || !name) {
-            throw new BadRequestException('This account provider does not have an email or name associated with it.');
-        }
-
-        const existingUser = await this.usersService.findUserByEmail(email);
-        if (!existingUser) {
-            return await this.usersService.createUser(email, '', Provider.GOOGLE, name || email);
-        }
-        return existingUser;
-    }
-
-    async logout(user: User, res: Response) {
-        res.clearCookie('Authentication');
-        res.clearCookie('Refresh');
-
-        await this.usersService.updateUserById(user.id, { refreshToken: null });
-    }
-    private generateJwtToken(payload: object, secret: string, expiresInMs: number): string {
-        return this.jwtService.sign(payload, {
-            secret,
-            expiresIn: `${expiresInMs}ms`,
-        });
-    }
-
-
-
-
-
+		await this.usersService.updateUserById(user.id, { refreshToken: null });
+	}
+	private generateJwtToken(
+		payload: object,
+		secret: string,
+		expiresInMs: number
+	): string {
+		return this.jwtService.sign(payload, {
+			secret,
+			expiresIn: `${expiresInMs}ms`
+		});
+	}
 }

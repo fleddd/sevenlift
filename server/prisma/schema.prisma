@@ -34,25 +34,8 @@ model User {
   @@map("users")
 }
 
-model TrainingProgram {
-  id String @id @default(cuid())
-
-  name String // Name of the program plan "PPL", "Arnold Split"
-
-  userId   String  @map("user_id")
-  user     User    @relation(fields: [userId], references: [id])
-  folderId String? @map("folder_id")
-  folder   Folder? @relation(fields: [folderId], references: [id])
-
-  createdAt   DateTime      @default(now()) @map("created_at")
-  updatedAt   DateTime      @updatedAt @map("updated_at")
-  TrainingDay TrainingDay[]
-
-  @@index([userId])
-  @@map("training_programs")
-}
-
 model Folder {
+  name             String
   id               String            @id @default(cuid())
   userId           String            @map("user_id")
   user             User              @relation(fields: [userId], references: [id])
@@ -60,8 +43,27 @@ model Folder {
   updatedAt        DateTime          @updatedAt @map("updated_at")
   trainingPrograms TrainingProgram[]
 
+  @@unique([userId, name])
   @@index([userId])
   @@map("folders")
+}
+
+model TrainingProgram {
+  id String @id @default(cuid())
+
+  name String // Name of the program plan "PPL", "Arnold Split"
+
+  userId   String @map("user_id")
+  user     User   @relation(fields: [userId], references: [id])
+  folderId String @map("folder_id")
+  folder   Folder @relation(fields: [folderId], references: [id])
+
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  TrainingDay TrainingDay[]
+
+  @@index([userId])
+  @@map("training_programs")
 }
 
 model TrainingDay {
