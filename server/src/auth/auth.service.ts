@@ -16,7 +16,7 @@ export class AuthService {
 		private readonly usersService: UsersService,
 		private readonly configService: ConfigService,
 		private readonly jwtService: JwtService
-	) {}
+	) { }
 
 	async login(user: User, response: Response) {
 		const now = Date.now();
@@ -49,25 +49,32 @@ export class AuthService {
 
 		response.cookie('Authentication', accessToken, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
+			sameSite: this.configService.getOrThrow('NODE_ENV') == 'production' ? "lax" : "none",
+			secure: this.configService.getOrThrow('NODE_ENV') == "production",
 			expires: expiresAccessToken
 		});
 
 		response.cookie('Refresh', refreshToken, {
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
+			sameSite: this.configService.getOrThrow('NODE_ENV') == 'production' ? "lax" : "none",
+			secure: this.configService.getOrThrow('NODE_ENV') == "production",
 			expires: expiresRefreshToken
 		});
 
-		const hashedRefreshToken = await hash(refreshToken);
+		const hashedRefreshToken = await hash(accessToken);
 
 		await this.usersService.updateUserById(user.id, {
 			refreshToken: hashedRefreshToken
 		});
 
 		return {
-			...user,
-			refreshToken: hashedRefreshToken
+			user: {
+				id: user.id,
+				name: user.name,
+				email: user.email,
+				currentProgramId: user.currentPlanId,
+			},
+			accessToken
 		};
 	}
 
@@ -106,12 +113,15 @@ export class AuthService {
 
 		const hashedPassword = await hash(password);
 
-		return this.usersService.createUser(
+		await this.usersService.createUser(
 			email,
 			hashedPassword,
 			Provider.LOCAL,
 			name
 		);
+		return {
+			message: "User was successfuly registered, log in to account"
+		}
 	}
 	async verifyRefreshToken(refreshToken: string, userId: string) {
 		const user = await this.usersService.findUserById(userId);
@@ -151,8 +161,9 @@ export class AuthService {
 		);
 
 		response.cookie('Authentication', accessToken, {
+			sameSite: this.configService.getOrThrow('NODE_ENV') == 'production' ? "lax" : "none",
+			secure: this.configService.getOrThrow('NODE_ENV') == "production",
 			httpOnly: true,
-			secure: process.env.NODE_ENV === 'production',
 			expires: expiresAccessToken
 		});
 
